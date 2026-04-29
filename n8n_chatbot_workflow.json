@@ -1,0 +1,516 @@
+{
+  "name": "AI Chatbot Workflow Template",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatbot-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1232,
+        336
+      ],
+      "id": "ea7b2f3a-167c-4ada-aaea-10a2a8ff9c90",
+      "name": "Webhook",
+      "webhookId": "chatbot-webhook"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body.message }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "[Agent Name] - AI Customer Service at [Your Company Name]\n\nIdentity:\nName: [Agent Name]\nCompany: [Your Company Name]\nRole: Lead Qualification Specialist\nTone: Professional, warm, helpful\n\nCompany Info:\n[Your Company Name]\nHQ: [Location] | Branches: [Locations]\nEmail: [Your Email]\nWebsite: [Your Website]\nServices: [List your services here, e.g., Web Development, Mobile Apps]\n\nConversation Flow:\n\n1. Greeting\n\"Hello! Welcome to [Your Company Name]! I'm [Agent Name]. How can I help you today?\nTo get started, may I have your name and business name?\"\nCollect: name, business_name\n\n2. Assess Needs\nAsk what best describes their current situation.\n[Define your options here]\n\n3. Present Solution\n[Define your solutions here based on user needs]\n\n4. Collect Contact - CRITICAL\nFirst ask for email:\n\"Perfect! Could you share your email?\"\nAfter collecting email, ALWAYS ask for WhatsApp as a separate follow-up:\n\"Thank you! And could you share your WhatsApp number with country code?\"\nMUST collect BOTH if possible. If user declines WhatsApp, accept email only and move on.\nVerify each: repeat back and confirm.\n\n5. Service Interest\nAsk which services interest them.\nCollect: service_interest\n\n6. Budget (Optional)\nAsk for a budget range.\nCollect: budget or \"to_be_discussed\"\n\n7. Callback Time\nAsk for a preferred callback time.\nCollect: preferred_callback_time\n\n8. Company Contact Info\nProvide your contact details.\n\n9. Confirm Details\nOnly include fields that were actually collected. NEVER show a blank or empty field in the confirmation.\n\nJSON Output Format:\n{\n  \"name\": \"\",\n  \"email\": \"\",\n  \"whatsapp\": \"\",\n  \"service\": \"\",\n  \"budget\": \"\",\n  \"contact\": \"\",\n  \"bot_reply\": \"\"\n}\nRules:\nRespond ONLY in valid JSON\nNO text outside JSON\nEmpty string if value missing\nNever guess or invent details\nNO emojis in responses (breaks JSON)\nUse line breaks, bullets\nDon't ask same question twice"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        -1072,
+        336
+      ],
+      "id": "a5bac79b-d5be-4d19-9884-7eced50a17af",
+      "name": "AI Agent",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// Robust extraction — handles parsed object OR raw string JSON.\n// Falls back gracefully so the webhook always gets a response.\n// ============================================================\ntry {\n  const raw = $input.first().json;\n\n  let parsed = raw.output;\n\n  if (typeof parsed === 'string') {\n    const cleaned = parsed.replace(/```json|```/g, '').trim();\n    const match = cleaned.match(/\\{[\\s\\S]*\\}/);\n    parsed = match ? JSON.parse(match[0]) : {};\n  }\n\n  if (!parsed || typeof parsed !== 'object') {\n    parsed = {};\n  }\n\n  const botReply  = parsed.bot_reply || \"I'm here to help! Could you please repeat your message?\";\n  const email     = (parsed.email     || \"\").trim();\n  const name      = (parsed.name      || \"\").trim();\n  const whatsapp  = (parsed.whatsapp  || \"\").trim();\n  const service   = (parsed.service   || \"\").trim();\n  const budget    = (parsed.budget    || \"\").trim();\n  const contact   = (parsed.contact   || \"\").trim();\n  const sessionId = $('Webhook').first().json.body?.sessionId || \"\";\n\n  const isComplete = botReply.toLowerCase().includes(\"you'll hear from our team\");\n\n  return {\n    json: {\n      name, email, whatsapp, service, budget,\n      contactOn: contact,\n      output: botReply,\n      isComplete,\n      sessionId,\n      hasEmail: email.length > 0\n    }\n  };\n\n} catch (err) {\n  const sessionId = $('Webhook').first().json.body?.sessionId || \"\";\n  return {\n    json: {\n      name: \"\", email: \"\", whatsapp: \"\", service: \"\", budget: \"\", contactOn: \"\",\n      output: \"I apologize for a brief technical issue. Could you please resend your last message?\",\n      isComplete: false,\n      sessionId,\n      hasEmail: false,\n      parseError: err.message\n    }\n  };\n}\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -784,
+        176
+      ],
+      "id": "02783559-b089-45b7-855a-0fe4a5adfb3f",
+      "name": "Extract Inquiry Details"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f4ef40bf-634a-42a3-a2d8-63ee88468c6b",
+              "leftValue": "={{ $json.isComplete }}",
+              "rightValue": "=true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -592,
+        176
+      ],
+      "id": "4cb9605a-01b3-4106-89c6-3263d6269e42",
+      "name": "If Conversation Complete"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "YOUR_SHEET_NAME",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Name": "={{ $json.name }}",
+            "Email": "={{ $json.email }}",
+            "Whatsapp": "={{ $json.whatsapp }}",
+            "Service": "={{ $json.service }}",
+            "Budget": "={{ $json.budget }}",
+            "Contact Date and Time": "={{ $json.contactOn }}"
+          },
+          "matchingColumns": [
+            "Name"
+          ],
+          "schema": [
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Whatsapp",
+              "displayName": "Whatsapp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Service",
+              "displayName": "Service",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Budget",
+              "displayName": "Budget",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Contact Date and Time",
+              "displayName": "Contact Date and Time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -416,
+        80
+      ],
+      "id": "9fffafee-f6a1-4fc8-9cbe-7fa3193fc9f7",
+      "name": "add data",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-email-exists",
+              "leftValue": "={{ $('Extract Inquiry Details').first().json.hasEmail }}",
+              "rightValue": "=true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -224,
+        80
+      ],
+      "id": "37671595-d3f4-47a5-93dd-77df73875f50",
+      "name": "Has Email?"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Extract Inquiry Details').first().json.email }}",
+        "subject": "Inquiry Received - [Your Company Name]",
+        "message": "=<p>Dear {{ $('Extract Inquiry Details').first().json.name }},</p>\n\n<p>Thank you for your interest in our services!</p>\n\n<p>We have received your inquiry for: <strong>{{ $('Extract Inquiry Details').first().json.service }}</strong></p>\n\n<p>Our team will review your requirements and contact you shortly to discuss how we can help you.</p>\n\n<p>Inquiry Details:</p>\n<ul>\n  <li>Service: {{ $('Extract Inquiry Details').first().json.service }}</li>\n  <li>Budget: {{ $('Extract Inquiry Details').first().json.budget || 'To be discussed' }}</li>\n</ul>\n\n<p>Best regards,<br>\n[Agent Name] | [Your Company Name]<br>\n[Your Email] | [Your Website]</p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "710568c5-705b-4130-8a52-0863b1d47204",
+      "name": "send confirmation msg",
+      "webhookId": "627d14e7-b45c-40d3-8436-7c344d162229",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "sendTo": "YOUR_ADMIN_EMAIL",
+        "subject": "=New Lead: {{ $('Extract Inquiry Details').first().json.name }} - {{ $('Extract Inquiry Details').first().json.service }}",
+        "message": "=<h3>New Inquiry Alert</h3>\n<p>A new lead has been captured and saved to Google Sheets.</p>\n\n<p><strong>Lead Details:</strong></p>\n<ul>\n  <li><strong>Name:</strong> {{ $('Extract Inquiry Details').first().json.name }}</li>\n  <li><strong>Email:</strong> {{ $('Extract Inquiry Details').first().json.email || 'Not provided' }}</li>\n  <li><strong>WhatsApp:</strong> {{ $('Extract Inquiry Details').first().json.whatsapp || 'Not provided' }}</li>\n  <li><strong>Service:</strong> {{ $('Extract Inquiry Details').first().json.service }}</li>\n  <li><strong>Budget:</strong> {{ $('Extract Inquiry Details').first().json.budget || 'To be discussed' }}</li>\n  <li><strong>Preferred Contact Time:</strong> {{ $('Extract Inquiry Details').first().json.contactOn || 'Not specified' }}</li>\n</ul>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        266,
+        192
+      ],
+      "id": "c99c4fbf-d3fc-4661-b90f-0360cb494905",
+      "name": "inform admin",
+      "webhookId": "048477bf-8f18-49e7-b581-d3dd8f503cb0",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// Build Response — safe on all 3 paths:\n//   1. Mid-conversation  (If Conversation Complete → FALSE)\n//   2. Completed flow    (inform admin → Build Response)\n//   3. AI Agent error    (AI Agent Error Handler → Build Response)\n//\n// Uses $input.first().json which always has data from the\n// direct predecessor, regardless of which path was taken.\n// ============================================================\ntry {\n  const inputData = $input.first().json;\n\n  const response  = inputData.output\n                 || inputData.response\n                 || \"Thank you for contacting us!\";\n\n  const sessionId = inputData.sessionId || \"\";\n\n  return {\n    json: {\n      status: \"success\",\n      response,\n      sessionId\n    }\n  };\n\n} catch (err) {\n  return {\n    json: {\n      status: \"error\",\n      response: \"Thank you for reaching out! Our team will contact you shortly.\",\n      sessionId: \"\"\n    }\n  };\n}\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -432,
+        416
+      ],
+      "id": "7813042f-44e7-4eaf-b97a-9405e7184371",
+      "name": "Build Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        -256,
+        416
+      ],
+      "id": "b9b79b27-f02a-45b3-803c-666c7b3a9f4a",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -1184,
+        528
+      ],
+      "id": "07fef510-eaaf-4e23-8944-cdb534c35f16",
+      "name": "Google Gemini Chat Model"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.body.sessionId }}",
+        "contextWindowLength": 30
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -1024,
+        528
+      ],
+      "id": "0f7317b0-bf4c-45c5-ab51-04668ba83987",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"name\": { \"type\": \"string\" },\n    \"email\": { \"type\": \"string\" },\n    \"whatsapp\": { \"type\": \"string\" },\n    \"service\": { \"type\": \"string\" },\n    \"budget\": { \"type\": \"string\" },\n    \"contact\": { \"type\": \"string\" },\n    \"bot_reply\": { \"type\": \"string\" }\n  }\n}\n"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -832,
+        528
+      ],
+      "id": "7545f965-0ca7-4221-9ab8-d1dd1b743f4d",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "jsCode": "// AI Agent Error Handler\n// Triggered ONLY when Gemini API fails (rate limit, timeout, etc.)\n// Outputs same shape as Extract Inquiry Details so Build Response\n// can read it uniformly via $input.\nconst sessionId = $('Webhook').first().json.body?.sessionId || \"\";\n\nreturn {\n  json: {\n    name: \"\", email: \"\", whatsapp: \"\", service: \"\", budget: \"\", contactOn: \"\",\n    output: \"I apologize for a brief technical issue. Please try again in a moment, or reach us directly at [Your Email]\",\n    isComplete: false,\n    sessionId,\n    hasEmail: false,\n    isAgentError: true\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -688,
+        368
+      ],
+      "id": "8718b7b7-f4ab-40b9-919c-d4272d4bf6e3",
+      "name": "AI Agent Error Handler"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Extract Inquiry Details",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent Error Handler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent Error Handler": {
+      "main": [
+        [
+          {
+            "node": "Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Inquiry Details": {
+      "main": [
+        [
+          {
+            "node": "If Conversation Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Conversation Complete": {
+      "main": [
+        [
+          {
+            "node": "add data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "add data": {
+      "main": [
+        [
+          {
+            "node": "Has Email?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Email?": {
+      "main": [
+        [
+          {
+            "node": "send confirmation msg",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "inform admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "send confirmation msg": {
+      "main": [
+        [
+          {
+            "node": "inform admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "inform admin": {
+      "main": [
+        [
+          {
+            "node": "Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "tags": []
+}
