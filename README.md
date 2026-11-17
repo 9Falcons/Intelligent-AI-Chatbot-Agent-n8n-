@@ -1,4 +1,7 @@
-# AI Chatbot n8n Workflow Template
+# Intelligent AI Chatbot Agent
+
+A 9Falcons customer service workflow built with n8n and Gemini. It qualifies inquiries, records leads in Google Sheets, and sends email notifications. Explore our AI automation services at [9Falcons](https://www.9falcons.com/).
+
 
 A comprehensive n8n workflow for an AI-powered customer service chatbot. This workflow captures leads, saves them to Google Sheets, and sends automated email confirmations.
 
