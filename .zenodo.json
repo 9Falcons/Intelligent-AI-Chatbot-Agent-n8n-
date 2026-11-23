@@ -1,0 +1,21 @@
+{
+  "title": "Intelligent AI Chatbot Agent: customer service and lead capture workflow for n8n",
+  "description": "<p>An open-source n8n workflow for an AI customer service chatbot powered by Google Gemini. It holds natural conversations, qualifies inquiries, collects lead details (name, email, WhatsApp, service interest, budget), saves qualified leads to Google Sheets, and sends Gmail confirmations to the visitor and alerts to the admin. Import the JSON file into n8n and connect your own credentials.</p><p>Built and maintained by <a href=\"https://www.9falcons.com/\">9Falcons</a>, a software development company and AI agency.</p>",
+  "upload_type": "software",
+  "creators": [
+    {
+      "name": "Ul Abideen, Zain",
+      "affiliation": "9Falcons"
+    }
+  ],
+  "license": "mit",
+  "keywords": [
+    "n8n",
+    "AI chatbot",
+    "customer service automation",
+    "lead capture",
+    "Google Gemini",
+    "workflow automation"
+  ],
+  "access_right": "open"
+}
